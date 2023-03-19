@@ -40,7 +40,7 @@ void start_measure_voltage(){
 }
 
 word measure_voltage(int analog_pin){
-  return analogRead(analog_pin) // TODO function for calculating the real value in millivolt
+  return analogRead(analog_pin); // TODO function for calculating the real value in millivolt
 }
 
 void stop_measure_voltage(){
