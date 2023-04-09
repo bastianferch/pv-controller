@@ -12,30 +12,39 @@
 const int SLAVE_SELECT_PIN=10;
 const int channel=0;
 // const int shutDownPin = 7;
-#define REL_IN 2 // Input relay 2, 18
-#define REL_OUT 3 // Output relay 3, 19
-#define MEAS_ON 4 // Measure on 4,20
-#define BAT_U_PIN A6 //  input voltage measurement battery A6
-#define PV_U_PIN A7 // input voltage measurement PV A7 
-#define PV_U_START_CHARGING 28000 // voltage to start charinging battery
-#define BAT_U_MAX 30600 //voltage to charging battery full
-#define BAT_U_MAX_H 30200 //voltage to restart charging battery (Hysteresis)
-#define BAT_U_MIN 28000 //voltage to stop discharging battery emty
-#define BAT_U_MIN_H 29000 //voltage to restart discharing (Hysteresis)
-#define BAT_LIN 29700 // battery linear voltage to power 28V until 29,7V
-#define INVERTER_START_DIODE_U 260 // voltage charging diode discharging starts
-#define INVERTER_START_DIODE_U_H 280 //voltage charging diode discharging stops (Hysteresis)
-#define INVERTER_START_U 280 // voltage pv_u discharging starts
+#define REL_IN 2                     // Input relay   2, 18
+#define REL_OUT 3                    // Output relay  3, 19
+#define MEAS_ON 4                    // Measure on    4, 20
+#define BAT_U_PIN A6                 // Input voltage measurement battery A6
+#define PV_U_PIN A7                  // Input voltage measurement PV A7 
+#define PV_U_START_CHARGING 28000    // Voltage to start charinging battery
+#define BAT_U_MAX 30600              // Voltage charging battery full
+#define BAT_U_SOFT_CHARGE 30450      // Voltage to start soft charge near battery full
+#define BAT_U_MAX_H 30200            // Voltage to restart charging battery (Hysteresis)
+#define BAT_U_MIN 28000              // Voltage to stop discharging battery emty
+#define BAT_U_MIN_H 29000            // Voltage to restart discharing (Hysteresis)
+#define BAT_LIN 29700                // Battery linear voltage to power 28V until 29,7V
+#define INVERTER_START_DIODE_U 260   // Voltage charging diode discharging starts
+#define INVERTER_START_DIODE_U_H 295 // Voltage charging diode discharging stops (Hysteresis)
+#define INVERTER_START_U 280         // Voltage pv_u discharging starts
+#define BATTERY_CAPACITY 48000       // 48.000mAH Battery Capacity
+#define INVERTER_START_TIME 15000    // Inverter start producing power to grid after 4 min = 15000 * 16 millis /clock frequence 1 Mhz instead of 16 MHz
+#define POWER_BASE_MAX 2500          // Maximum Power needed at base time in mA
+#define PEAK_TIME_PERS 45            // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
 
-
-unsigned long night_start=0, night_length=0, time_power_check;
-word bat_u, pv_u,battery_power;
-word last_bat_u, last_pv_u, discharge_current; //voltage in mV, current in mA   
-boolean relay_on[]={false,false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
+unsigned long night_start=0, night_length=43200000; //night_start stores time stemp in millis from last day to night dedection (1MHz), night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 12h
+unsigned long time_power_check;      // time stemp from last battery power incremental and decremental calculation
+word bat_u, pv_u;                    // measured voltage at battery and PV
+word battery_power;                  // calculated actual power in battery
+word power_beak=3000, power_base=2000; // base (off beak) and beak power from battery to inverter
+word last_bat_u, last_pv_u;          //voltage in mV   
+int discharge_current, milliamps;    // current in mA, milliamps to or from battery
+byte ser_mon_line_counter = 0;       // Serial monitor line counter
+boolean relay_on[]={false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
 
 void setup(){
-  clockspeed();
-  //Serial.begin(9600); //open the serial port at 9600 bps: Achtung aufgrund der Reduktion der Taktfrequenz die Baudrate am Computer 600
+  clockspeed();                      // reduce clockspeed to 1MHz
+  Serial.begin(9600);                // open the serial port at 9600 bps: Attention clock rate 1MHz lead to Baudrate at the Computer 600 Baud
   pinmodes();
   initialize_SPI();
   start_measure_voltage();
@@ -43,16 +52,16 @@ void setup(){
   pv_u = measure_voltage(PV_U_PIN);
   stop_measure_voltage();
 
-  estimate_bat_power();
+  estimate_bat_power();              // estimates Power in battery when adruino starts according to measured voltage from battery
 
-  if (pv_u > PV_U_START_CHARGING) {
-    if (bat_u<BAT_U_MAX) {
-      relay_on[REL_IN]=true;
+  if (pv_u > PV_U_START_CHARGING) {  // if Volatge at PV is higher than usual voltage to start charging then
+    if (bat_u < BAT_U_MAX) {         // iF battery voltage is lower than maximum battery voltage then start charging
+      relay_on[REL_IN] = true;       
       do_relay_on(REL_IN,true);
     }        
-  } else if (bat_u>BAT_U_MIN_H){
-    discharge_current=2000;
-    start_discharging();
+  } else if (bat_u > BAT_U_MIN_H){   // if Volatge at PV is not higher than usual voltage to start charging then do discharging at base_power
+    discharge_current = power_base;
+    start_discharging(discharge_current);
   }  
 }
 
@@ -65,35 +74,46 @@ void loop(){
   pv_u = measure_voltage(PV_U_PIN);
   stop_measure_voltage();
 
-  battery_power=calculate_power_in_battery(battery_power);
+  battery_power = calculate_power_in_battery(battery_power);
 
-
-  if (!relay_on[REL_IN] && (bat_u<BAT_U_MAX_H)) {
-    if ((!relay_on[REL_OUT] && (pv_u>PV_U_START_CHARGING)) || (relay_on[REL_OUT] && (pv_u>bat_u))) {
-      relay_on[REL_IN]=true;
-      do_relay_on(REL_IN,true);
+//                                         start battery charging relay?
+  if (!relay_on[REL_IN] && bat_u < BAT_U_MAX_H) {   
+    if ((!relay_on[REL_OUT] && pv_u > PV_U_START_CHARGING) || (relay_on[REL_OUT] &&  pv_u > bat_u)) {
+      relay_on[REL_IN] = true;
+      do_relay_on(REL_IN, true);
     }
   }
-  if (relay_on[REL_IN] && ((pv_u<bat_u) || (bat_u> BAT_U_MAX))) {
-    relay_on[REL_IN]=false;
-    do_relay_on(REL_IN,false);
-  }
-  if ( !relay_on[REL_OUT] && (bat_u> BAT_U_MIN_H)) {
-    if ((relay_on[REL_IN] && ((pv_u-bat_u)<INVERTER_START_DIODE_U)) || (!relay_on[REL_IN] && ( pv_u <INVERTER_START_U))) {
-      Leistungsermittlung_Nacht();
-      discharge_current=2000;
-      start_discharging();
+//                                         stop battery charging relay?
+  if (relay_on[REL_IN] && (pv_u < bat_u || bat_u > BAT_U_MAX)) {
+    relay_on[REL_IN] = false;
+    do_relay_on(REL_IN, false);
+    if (bat_u > BAT_U_MAX) {
+      battery_power = BATTERY_CAPACITY;
+      relay_on[REL_OUT] = false;        // stop discharging soft charging
+      do_relay_on(REL_OUT, false);
     }
   }
-  if (relay_on[REL_OUT] && ((bat_u<BAT_U_MIN) || (relay_on[REL_IN] && (pv_u-bat_u)>INVERTER_START_DIODE_U_H))) {
-    relay_on[REL_OUT]=false;
-    do_relay_on(REL_OUT,false);
+//                                         start discharging relay when discharging time or to do soft charing?
+  if ( !relay_on[REL_OUT] && bat_u > BAT_U_MIN_H) {
+    if (relay_on[REL_IN] && (((pv_u - bat_u) < INVERTER_START_DIODE_U || bat_u > BAT_U_SOFT_CHARGE) || (!relay_on[REL_IN] &&  pv_u < INVERTER_START_U))) {
+      power_base_peak_calculation();
+      discharge_current = power_base;
+      start_discharging(discharge_current);
+    }
   }
-  Leistungssteuerung();
+//                                         stop discharging relay
+  if (relay_on[REL_OUT] && (bat_u < BAT_U_MIN || (relay_on[REL_IN] && (pv_u - bat_u) > INVERTER_START_DIODE_U_H))) {
+    relay_on[REL_OUT] = false;
+    do_relay_on(REL_OUT, false);
+    if (bat_u < BAT_U_MIN) {
+      battery_power = 0;
+    }
+  }
+  beak_base_time_soft_charge_power_controll();
   check_night_start();
   check_night_end();
   Parameterausgabe_Serieller_Monitor();
-  delay(7500); //2 Minuten (Taxtfrequenz reduziert auf 1 Mhz)
+  delay(15000); //4 minutes (Clock frequency redused to 1 Mhz)
 }
 
 // ******* CHAPERT SUBROUTINES SETUP
@@ -122,7 +142,7 @@ void initialize_SPI(){
 }
 
 void estimate_bat_power(){
-  if (bat_u<BAT_LIN) {
+  if (bat_u < BAT_LIN) {
     battery_power = map(bat_u, BAT_U_MIN, BAT_LIN, 0, 25000); 
   } else {
     battery_power = 30000;        
@@ -145,8 +165,8 @@ void stop_measure_voltage(){
 
 // ******* CHAPERT SUBROUTINE Battery Power Calculation
 long calculate_power_in_battery(long powermah){
-  word milliamps = 0, diode_u = 0;
-
+  word diode_u = 0;
+  milliamps = 0;
   diode_u = (pv_u - bat_u + last_pv_u - last_bat_u) / 2;
   if (relay_on[REL_IN] && (diode_u>0)){  
     switch (diode_u) {
@@ -176,7 +196,7 @@ long calculate_power_in_battery(long powermah){
   if (relay_on[REL_OUT]) {
     milliamps = milliamps - discharge_current;
   }
-  powermah = powermah + (millis()-time_power_check)*milliamps/225000;
+  powermah = powermah + (millis() - time_power_check) * milliamps / 225000;
   time_power_check = millis();
 }
 
@@ -190,13 +210,12 @@ void do_relay_on(byte pin, boolean doit){
   }     
 }
 
-void start_discharging() { //Battery discharge power control function
+void start_discharging(word current) { //Battery discharge power control function
   set_power_of_discharge(1500);
-    relay_on[REL_OUT]=true;
-    do_relay_on(REL_OUT,true);
-    delay(15000);
-    set_power_of_discharge(discharge_current);
-  
+  relay_on[REL_OUT]=true;
+  do_relay_on(REL_OUT,true);
+  delay(15000);
+  set_power_of_discharge(current);
 }
 
 void set_power_of_discharge(int value) { //milliampere
@@ -219,33 +238,49 @@ void digitalPotWrite(int address, int value) {
 
 // ******* CHAPERT SUBROUTINES Night Calulations
 void check_night_start(){
-  if(last_pv_u > 8000 & pv_u < 8000){
+  if(last_pv_u > 8000 && pv_u < 8000){
     night_start = millis();
   }
 }
 void check_night_end(){
-  if(last_pv_u < 8000 & pv_u > 8000 & (millis() - night_start) > 675000){
-    night_length = millis() - night_start;    
+  if(last_pv_u < 8000 && pv_u > 8000 && night_start > 0 && (millis() - night_start) > 675000) {
+    night_length = 16 * (millis() - night_start);    
   }
 }
 
 
 // ******* CHAPERT SUBROUTINES Night Power Management
-void Leistungsermittlung_Nacht () {
-  
+void power_base_peak_calculation () {
+  power_base = max(1000, (battery_power / (night_length / 60000 + 1) * 0,6));
+  power_beak = max(1000, (battery_power / (night_length / 60000 + 1) * 1,1));
+  if (power_base > POWER_BASE_MAX) {
+    power_beak = min(6500, (power_beak + (power_base - POWER_BASE_MAX)));
+    power_base = POWER_BASE_MAX;            
+  } 
 }
 
-void Leistungssteuerung () {
-  
+void beak_base_time_soft_charge_power_controll () {
+  if (relay_on[REL_OUT]) {
+    if (relay_on[REL_IN] && bat_u > BAT_U_SOFT_CHARGE) {
+      set_power_of_discharge(max(500, min(7000, milliamps-2000)));      
+    } else if ((millis() - night_start) * 16 < (night_length * PEAK_TIME_PERS) || ((millis() - night_start) * 16) > night_length) {
+      set_power_of_discharge(power_beak);
+    } 
+    else {
+      set_power_of_discharge(power_base);     
+    }
+  } 
 }
 
 // ******* CHAPERT SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
-  //Serial.println("Spannung PV(mV):" + String(pv_u) + "Spannug Bat(mV):" + String(bat_u));
-  //Serial.println("beide Rel off");
+  if (0 == ser_mon_line_counter % 32) {
+    Serial.println("status of relays, volt_PV, volt_bat, disc_curr, bat_curr, bat_power, night_start, night_length");    
+  }
+  Serial.print( relay_on[REL_IN]  ? "In is on  ": "In is off " + relay_on[REL_OUT]  ? "Out is on  ": "Out is off " + String(pv_u) + String(bat_u));
+  Serial.println( String(discharge_current) + String(milliamps) + String(battery_power) + String(night_start/3750) + String(night_length/60000));
+  ser_mon_line_counter++;
 }
-
-
 
 void sleep(){
   // TODO
