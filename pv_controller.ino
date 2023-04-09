@@ -37,7 +37,7 @@ unsigned long time_power_check;      // time stamp from last battery power incre
 word bat_u, pv_u;                    // measured voltage at battery and PV
 word last_bat_u, last_pv_u;          // voltage in mV
 word battery_power;                  // calculated actual power in battery
-word power_peak = 3000, power_base = 2000; // base (off peak) and peak power from battery to inverter
+word power_peak = 4000, power_base = 2500; // base (off peak) and peak power from battery to inverter
 int discharge_current, milliamps;    // current in mA, milliamps to or from battery
 byte ser_mon_line_counter = 0;       // Serial monitor line counter
 boolean relay_on[] = {false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
@@ -278,8 +278,8 @@ void Parameterausgabe_Serieller_Monitor() {
   if (0 == ser_mon_line_counter % 32) {
     Serial.println("status of relays, volt_PV, volt_bat, disc_curr, bat_curr, bat_power, night_start, night_length");    
   }
-  Serial.print( relay_on[REL_IN]  ? "In is on  ": "In is off " + relay_on[REL_OUT]  ? "Out is on  ": "Out is off " + String(pv_u) + String(bat_u));
-  Serial.println( String(discharge_current) + String(milliamps) + String(battery_power) + String(night_start/3750) + String(night_length/60000));
+  Serial.print( relay_on[REL_IN]  ? "In is on  ": "In is off " + relay_on[REL_OUT]  ? "Out is on  ": "Out is off " + String(pv_u) + " " + String(bat_u) + " ");
+  Serial.println( String(discharge_current) + " " + String(milliamps) + " " + String(battery_power) + " " + String(night_start/3750) + " " + String(night_length/60000));
   ser_mon_line_counter++;
 }
 
