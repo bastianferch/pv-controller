@@ -7,40 +7,40 @@
   * CLK - to digital pin 13 (SCK pin)
 */
 
-#include <SPI.h>
-// set pin 10 as the slave select for the digital pot:
-const int SLAVE_SELECT_PIN=10;
-const int channel=0;
-// const int shutDownPin = 7;
+#include <SPI.h>                     // set pin 10 as the slave select for the digital pot:
+const int SLAVE_SELECT_PIN = 10;
+const int channel = 0;
+
 #define REL_IN 2                     // Input relay   2, 18
 #define REL_OUT 3                    // Output relay  3, 19
 #define MEAS_ON 4                    // Measure on    4, 20
 #define BAT_U_PIN A6                 // Input voltage measurement battery A6
 #define PV_U_PIN A7                  // Input voltage measurement PV A7 
+
 #define PV_U_START_CHARGING 28000    // Voltage to start charinging battery
 #define BAT_U_MAX 30600              // Voltage charging battery full
 #define BAT_U_SOFT_CHARGE 30450      // Voltage to start soft charge near battery full
 #define BAT_U_MAX_H 30200            // Voltage to restart charging battery (Hysteresis)
-#define BAT_U_MIN 28000              // Voltage to stop discharging battery emty
+#define BAT_U_MIN 28000              // Voltage to stop discharging battery empty
 #define BAT_U_MIN_H 29000            // Voltage to restart discharing (Hysteresis)
 #define BAT_LIN 29700                // Battery linear voltage to power 28V until 29,7V
 #define INVERTER_START_DIODE_U 260   // Voltage charging diode discharging starts
 #define INVERTER_START_DIODE_U_H 295 // Voltage charging diode discharging stops (Hysteresis)
-#define INVERTER_START_U 280         // Voltage pv_u discharging starts
 #define BATTERY_CAPACITY 48000       // 48.000mAH Battery Capacity
 #define INVERTER_START_TIME 15000    // Inverter start producing power to grid after 4 min = 15000 * 16 millis /clock frequence 1 Mhz instead of 16 MHz
 #define POWER_BASE_MAX 2500          // Maximum Power needed at base time in mA
 #define PEAK_TIME_PERS 45            // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
 
-unsigned long night_start=0, night_length=43200000; //night_start stores time stemp in millis from last day to night dedection (1MHz), night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 12h
-unsigned long time_power_check;      // time stemp from last battery power incremental and decremental calculation
+unsigned long night_start = 0;       // night_start stores time stamp in millis from last day to night dedection (1MHz)
+unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 12h
+unsigned long time_power_check;      // time stamp from last battery power incremental and decremental calculation
 word bat_u, pv_u;                    // measured voltage at battery and PV
+word last_bat_u, last_pv_u;          // voltage in mV
 word battery_power;                  // calculated actual power in battery
-word power_beak=3000, power_base=2000; // base (off beak) and beak power from battery to inverter
-word last_bat_u, last_pv_u;          //voltage in mV   
+word power_peak = 3000, power_base = 2000; // base (off peak) and peak power from battery to inverter
 int discharge_current, milliamps;    // current in mA, milliamps to or from battery
 byte ser_mon_line_counter = 0;       // Serial monitor line counter
-boolean relay_on[]={false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
+boolean relay_on[] = {false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
 
 void setup(){
   clockspeed();                      // reduce clockspeed to 1MHz
@@ -65,60 +65,10 @@ void setup(){
   }  
 }
 
-void loop(){
-
-  last_bat_u = bat_u;
-  last_pv_u = pv_u;
-  start_measure_voltage();
-  bat_u = measure_voltage(BAT_U_PIN);
-  pv_u = measure_voltage(PV_U_PIN);
-  stop_measure_voltage();
-
-  battery_power = calculate_power_in_battery(battery_power);
-
-//                                         start battery charging relay?
-  if (!relay_on[REL_IN] && bat_u < BAT_U_MAX_H) {   
-    if ((!relay_on[REL_OUT] && pv_u > PV_U_START_CHARGING) || (relay_on[REL_OUT] &&  pv_u > bat_u)) {
-      relay_on[REL_IN] = true;
-      do_relay_on(REL_IN, true);
-    }
-  }
-//                                         stop battery charging relay?
-  if (relay_on[REL_IN] && (pv_u < bat_u || bat_u > BAT_U_MAX)) {
-    relay_on[REL_IN] = false;
-    do_relay_on(REL_IN, false);
-    if (bat_u > BAT_U_MAX) {
-      battery_power = BATTERY_CAPACITY;
-      relay_on[REL_OUT] = false;        // stop discharging soft charging
-      do_relay_on(REL_OUT, false);
-    }
-  }
-//                                         start discharging relay when discharging time or to do soft charing?
-  if ( !relay_on[REL_OUT] && bat_u > BAT_U_MIN_H) {
-    if (relay_on[REL_IN] && (((pv_u - bat_u) < INVERTER_START_DIODE_U || bat_u > BAT_U_SOFT_CHARGE) || (!relay_on[REL_IN] &&  pv_u < INVERTER_START_U))) {
-      power_base_peak_calculation();
-      discharge_current = power_base;
-      start_discharging(discharge_current);
-    }
-  }
-//                                         stop discharging relay
-  if (relay_on[REL_OUT] && (bat_u < BAT_U_MIN || (relay_on[REL_IN] && (pv_u - bat_u) > INVERTER_START_DIODE_U_H))) {
-    relay_on[REL_OUT] = false;
-    do_relay_on(REL_OUT, false);
-    if (bat_u < BAT_U_MIN) {
-      battery_power = 0;
-    }
-  }
-  beak_base_time_soft_charge_power_controll();
-  check_night_start();
-  check_night_end();
-  Parameterausgabe_Serieller_Monitor();
-  delay(15000); //4 minutes (Clock frequency redused to 1 Mhz)
-}
 
 // ******* CHAPERT SUBROUTINES SETUP
 void clockspeed() {
-//clock to 1MHz
+  //clock to 1MHz
   CLKPR=0x80,
   CLKPR=0x04;
 }
@@ -147,6 +97,57 @@ void estimate_bat_power(){
   } else {
     battery_power = 30000;        
   }
+}
+
+void loop(){
+
+  last_bat_u = bat_u;
+  last_pv_u = pv_u;
+  start_measure_voltage();
+  bat_u = measure_voltage(BAT_U_PIN);
+  pv_u = measure_voltage(PV_U_PIN);
+  stop_measure_voltage();
+
+  battery_power = calculate_power_in_battery(battery_power);
+
+  //                                         start battery charging relay?
+  if (!relay_on[REL_IN] && bat_u < BAT_U_MAX_H) {   
+    if ((!relay_on[REL_OUT] && pv_u > PV_U_START_CHARGING) || (relay_on[REL_OUT] &&  pv_u > bat_u)) {
+      relay_on[REL_IN] = true;
+      do_relay_on(REL_IN, true);
+    }
+  }
+//                                         stop battery charging relay?
+  if (relay_on[REL_IN] && (pv_u < bat_u || bat_u > BAT_U_MAX)) {
+    relay_on[REL_IN] = false;
+    do_relay_on(REL_IN, false);
+    if (bat_u > BAT_U_MAX) {
+      battery_power = BATTERY_CAPACITY;
+      relay_on[REL_OUT] = false;        // stop discharging soft charging
+      do_relay_on(REL_OUT, false);
+    }
+  }
+//                                         start discharging relay when discharging time or to do soft charing?
+  if ( !relay_on[REL_OUT] && bat_u > BAT_U_MIN_H) {
+    if (relay_on[REL_IN] && (((pv_u - bat_u) < INVERTER_START_DIODE_U || bat_u > BAT_U_SOFT_CHARGE) || (!relay_on[REL_IN] &&  pv_u < INVERTER_START_DIODE_U))) {
+      power_base_peak_calculation();
+      discharge_current = power_base;
+      start_discharging(discharge_current);
+    }
+  }
+//                                         stop discharging relay
+  if (relay_on[REL_OUT] && (bat_u < BAT_U_MIN || (relay_on[REL_IN] && (pv_u - bat_u) > INVERTER_START_DIODE_U_H))) {
+    relay_on[REL_OUT] = false;
+    do_relay_on(REL_OUT, false);
+    if (bat_u < BAT_U_MIN) {
+      battery_power = 0;
+    }
+  }
+  peak_base_time_soft_charge_power_controll();
+  check_night_start();
+  check_night_end();
+  Parameterausgabe_Serieller_Monitor();
+  delay(15000); //4 minutes (Clock frequency redused to 1 Mhz)
 }
 
 // ******* CHAPERT SUBROUTINES Battery and PV voltage measurement
@@ -252,19 +253,19 @@ void check_night_end(){
 // ******* CHAPERT SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   power_base = max(1000, (battery_power / (night_length / 60000 + 1) * 0,6));
-  power_beak = max(1000, (battery_power / (night_length / 60000 + 1) * 1,1));
+  power_peak = max(1000, (battery_power / (night_length / 60000 + 1) * 1,1));
   if (power_base > POWER_BASE_MAX) {
-    power_beak = min(6500, (power_beak + (power_base - POWER_BASE_MAX)));
+    power_peak = min(6500, (power_peak + (power_base - POWER_BASE_MAX)));
     power_base = POWER_BASE_MAX;            
   } 
 }
 
-void beak_base_time_soft_charge_power_controll () {
+void peak_base_time_soft_charge_power_controll () {
   if (relay_on[REL_OUT]) {
     if (relay_on[REL_IN] && bat_u > BAT_U_SOFT_CHARGE) {
       set_power_of_discharge(max(500, min(7000, milliamps-2000)));      
     } else if ((millis() - night_start) * 16 < (night_length * PEAK_TIME_PERS) || ((millis() - night_start) * 16) > night_length) {
-      set_power_of_discharge(power_beak);
+      set_power_of_discharge(power_peak);
     } 
     else {
       set_power_of_discharge(power_base);     
