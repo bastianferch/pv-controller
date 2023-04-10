@@ -38,7 +38,7 @@ word bat_u, pv_u;                    // measured voltage at battery and PV
 word last_bat_u, last_pv_u;          // voltage in mV
 word battery_power;                  // calculated actual power in battery
 word power_peak = 4000, power_base = 2500; // base (off peak) and peak power from battery to inverter
-int discharge_current, milliamps;    // current in mA, milliamps to or from battery
+int discharge_current = 0, milliamps = 0;    // current in mA, milliamps to or from battery
 byte ser_mon_line_counter = 0;       // Serial monitor line counter
 boolean relay_on[] = {false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
 
@@ -93,7 +93,7 @@ void initialize_SPI(){
 
 void estimate_bat_power(){
   if (bat_u < BAT_LIN) {
-    battery_power = map(bat_u, BAT_U_MIN, BAT_LIN, 0, 25000); 
+    battery_power = max(0, map(bat_u, BAT_U_MIN, BAT_LIN, 0, 25000)); 
   } else {
     battery_power = 30000;        
   }
@@ -280,13 +280,26 @@ void peak_base_time_soft_charge_power_controll () {
 
 // ******* CHAPERT SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
+  char outstr[6]="";
   if (0 == (ser_mon_line_counter % 32)) {
-    Serial.println("status of relays, volt_PV, volt_bat, disc_curr, bat_curr, bat_power, night_start, night_length");    
+    Serial.println("Status of relays          Volt_PV  Volt_bat Disc_curr  Bat_Curr Bat_Power Night_start(min)  Night_length(min)");    
   }
-  Serial.print(relay_on[REL_IN]  ? "In is on  " : "In is off ");
-  Serial.print(relay_on[REL_OUT]  ? "Out is on  " : "Out is off ");
-  Serial.println(String(pv_u) + " " + String(bat_u) + " " + String(discharge_current) + " " + String(milliamps) + " " + String(battery_power) +
-  " " + String(night_start/3750) + " " + String(night_length/60000));
+  Serial.print(relay_on[REL_IN]  ? "In is on   " : "In is off  ");
+  Serial.print(relay_on[REL_OUT]  ? "Out is on   " : "Out is off  ");
+  sprintf(outstr, "%10d", pv_u);
+  Serial.print(outstr);
+  sprintf(outstr, "%10d",bat_u);
+  Serial.print(outstr);
+  sprintf(outstr, "%10d", discharge_current);
+  Serial.print(outstr);
+  sprintf(outstr, "%10d", milliamps);
+  Serial.print(outstr);
+  sprintf(outstr, "%10d", battery_power);
+  Serial.print(outstr);
+  sprintf(outstr, "%17d", night_start/3750);
+  Serial.print(outstr);
+  sprintf(outstr, "%17d", night_length/60000);
+  Serial.println(outstr);
   ser_mon_line_counter++;
 }
 
