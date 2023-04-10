@@ -32,7 +32,7 @@ const int channel = 0;
 #define PEAK_TIME_PERS 45            // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
 
 unsigned long night_start = 0;       // night_start stores time stamp in millis from last day to night dedection (1MHz)
-unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 12h
+unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 43.200.000 millis = 12h
 unsigned long time_power_check;      // time stamp from last battery power incremental and decremental calculation
 word bat_u, pv_u;                    // measured voltage at battery and PV
 word last_bat_u, last_pv_u;          // voltage in mV
@@ -127,27 +127,30 @@ void loop(){
       do_relay_on(REL_OUT, false);
     }
   }
-//                                         start discharging relay when discharging time or to do soft charing?
+//                                         start discharging relay when pv Voltage under start charing voltage or to do soft charing?
   if ( !relay_on[REL_OUT] && bat_u > BAT_U_MIN_H) {
-    if (relay_on[REL_IN] && (((pv_u - bat_u) < INVERTER_START_DIODE_U || bat_u > BAT_U_SOFT_CHARGE) || (!relay_on[REL_IN] &&  pv_u < INVERTER_START_DIODE_U))) {
+    if ((relay_on[REL_IN] && ((pv_u - bat_u) < INVERTER_START_DIODE_U || bat_u > BAT_U_SOFT_CHARGE)) || (!relay_on[REL_IN] &&  pv_u <=  PV_U_START_CHARGING)) {
       power_base_peak_calculation();
       discharge_current = power_base;
       start_discharging(discharge_current);
     }
   }
 //                                         stop discharging relay
-  if (relay_on[REL_OUT] && (bat_u < BAT_U_MIN || (relay_on[REL_IN] && (pv_u - bat_u) > INVERTER_START_DIODE_U_H))) {
-    relay_on[REL_OUT] = false;
-    do_relay_on(REL_OUT, false);
-    if (bat_u < BAT_U_MIN) {
-      battery_power = 0;
-    }
+  if (relay_on[REL_OUT]) { 
+    if (bat_u < BAT_U_MIN || (relay_on[REL_IN] && (pv_u - bat_u) > INVERTER_START_DIODE_U_H)) {
+      relay_on[REL_OUT] = false;
+      do_relay_on(REL_OUT, false);
+      if (bat_u < BAT_U_MIN) {
+        battery_power = 0;
+      }
+    }        
   }
   peak_base_time_soft_charge_power_controll();
   check_night_start();
   check_night_end();
   Parameterausgabe_Serieller_Monitor();
-  delay(15000); //4 minutes (Clock frequency redused to 1 Mhz)
+  delay(80);
+  //delay(15000); //4 minutes (Clock frequency redused to 1 Mhz)
 }
 
 // ******* CHAPERT SUBROUTINES Battery and PV voltage measurement
@@ -197,7 +200,7 @@ long calculate_power_in_battery(long powermah){
   if (relay_on[REL_OUT]) {
     milliamps = milliamps - discharge_current;
   }
-  powermah = powermah + (millis() - time_power_check) * milliamps / 225000;
+  powermah = min(max(0, powermah + (millis() - time_power_check) * milliamps / 225000), BATTERY_CAPACITY);
   time_power_check = millis();
 }
 
@@ -252,11 +255,13 @@ void check_night_end(){
 
 // ******* CHAPERT SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
-  power_base = max(1000, (battery_power / (night_length / 60000 + 1) * 0,6));
-  power_peak = max(1000, (battery_power / (night_length / 60000 + 1) * 1,1));
-  if (power_base > POWER_BASE_MAX) {
-    power_peak = min(6500, (power_peak + (power_base - POWER_BASE_MAX)));
-    power_base = POWER_BASE_MAX;            
+  if (night_start != 0) {
+    power_base = max(1000, (battery_power / (night_length / 3600000 + 1) * 0,6));
+    power_peak = max(1000, (battery_power / (night_length / 3600000 + 1) * 1,1));
+    if (power_base > POWER_BASE_MAX) {
+      power_peak = min(6500, (power_peak + (power_base - POWER_BASE_MAX)));
+      power_base = POWER_BASE_MAX;                  
+    }
   } 
 }
 
@@ -275,11 +280,13 @@ void peak_base_time_soft_charge_power_controll () {
 
 // ******* CHAPERT SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
-  if (0 == ser_mon_line_counter % 32) {
+  if (0 == (ser_mon_line_counter % 32)) {
     Serial.println("status of relays, volt_PV, volt_bat, disc_curr, bat_curr, bat_power, night_start, night_length");    
   }
-  Serial.print( relay_on[REL_IN]  ? "In is on  ": "In is off " + relay_on[REL_OUT]  ? "Out is on  ": "Out is off " + String(pv_u) + " " + String(bat_u) + " ");
-  Serial.println( String(discharge_current) + " " + String(milliamps) + " " + String(battery_power) + " " + String(night_start/3750) + " " + String(night_length/60000));
+  Serial.print(relay_on[REL_IN]  ? "In is on  " : "In is off ");
+  Serial.print(relay_on[REL_OUT]  ? "Out is on  " : "Out is off ");
+  Serial.println(String(pv_u) + " " + String(bat_u) + " " + String(discharge_current) + " " + String(milliamps) + " " + String(battery_power) +
+  " " + String(night_start/3750) + " " + String(night_length/60000));
   ser_mon_line_counter++;
 }
 
