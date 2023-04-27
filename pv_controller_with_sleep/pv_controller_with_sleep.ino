@@ -221,7 +221,7 @@ long calculate_power_in_battery(long power_mah){
   word diode_u = 0;
   int divisor = 0;
   int change = 0;
-  
+  long time_delay;
   milliamps = 0;
   if (pv_u > bat_u) {
     diode_u = pv_u - bat_u;
@@ -252,8 +252,8 @@ long calculate_power_in_battery(long power_mah){
     milliamps = milliamps - discharge_current;
   }
   if (abs(milliamps) > 15) { 
-    divisor = 225000 / milliamps;
-    change =  (millis() - time_power_check) / divisor;
+    time_delay = (millis() - time_power_check);
+    change =  time_delay / (225000 / milliamps);
     if(change < 0 && abs(change) > power_mah){
       power_mah = 0;      
     } else {
