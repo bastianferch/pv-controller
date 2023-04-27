@@ -37,7 +37,7 @@ extern unsigned long timer0_millis;
 #define BATTERY_CAPACITY 45000       // 48.000mAH Battery Capacity
 #define INVERTER_START_TIME 15000    // Inverter start producing power to grid after 4 min = 15000 * 16 millis /clock frequence 1 Mhz instead of 16 MHz
 #define POWER_BASE_MAX 2500          // Maximum Power needed at base time in mA
-#define PEAK_TIME_PERS 45            // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
+#define PEAK_TIME_PERC 0.45          // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
 
 volatile unsigned long night_start = 0;       // night_start stores time stamp in millis/16 from last day to night dedection (divisor 16 because of 1MHz clock frequency)
 volatile unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 43.200.000 millis = 12h
@@ -190,7 +190,7 @@ void loop(){
       }
     }
   }
-  peak_base_time_soft_charge_power_controll();
+  peak_base_time_soft_charge_power_control();
   Parameterausgabe_Serieller_Monitor();
   for (deepsleep_counter = 0; deepsleep_counter < 30; deepsleep_counter++) {
     watchdog_deepsleep(33);         // deep_sleep 33 = 8 sec
@@ -344,11 +344,16 @@ void power_base_peak_calculation () {
   } 
 }
 
-void peak_base_time_soft_charge_power_controll () {
+void peak_base_time_soft_charge_power_control () {
   if (relay_on[REL_OUT]) {
+    long since_night_start = (millis() - night_start) * 16;
     if (relay_on[REL_IN] && bat_u > BAT_U_SOFT_CHARGE_H) {
-      discharge_current = (max(500, min(7000, milliamps-2000)));      
-    } else if ((millis() - night_start) * 16 < (night_length * PEAK_TIME_PERS) || ((millis() - night_start) * 16) > night_length) {
+      Serial.print("Base peak time soft charge : time since night start : ");
+      Serial.print(since_night_start);
+      Serial.print("Peak night length : ");
+      Serial.println(night_length * PEAK_TIME_PERC);      
+      discharge_current = (max(500, min(7000, milliamps - 2000)));
+    } else if (since_night_start  < (night_length * PEAK_TIME_PERC) || since_night_start > night_length) { 
       discharge_current = power_peak;
     } 
     else {
