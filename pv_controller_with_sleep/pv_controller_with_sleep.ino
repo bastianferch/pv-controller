@@ -85,7 +85,7 @@ void setup(){
 }
 
 
-// ******* CHAPERT SUBROUTINES SETUP
+// ******* Chapter SUBROUTINES SETUP
 void clockspeed() {
   //clock to 1MHz
   CLKPR=0x80,
@@ -197,7 +197,7 @@ void loop(){
   } 
 }
 
-// ******* CHAPERT SUBROUTINES Battery and PV voltage measurement
+// ******* Chapter SUBROUTINES Battery and PV voltage measurement
 void start_measure_voltage(){
   digitalWrite(MEAS_ON,1);
 }
@@ -216,10 +216,11 @@ long map_word(long value, word from_low, word from_high, word to_low, word to_hi
 }
 
 
-// ******* CHAPERT SUBROUTINE Battery Power Calculation
-long calculate_power_in_battery(long powermah){
+// ******* Chapter SUBROUTINE Battery Power Calculation
+long calculate_power_in_battery(long power_mah){
   word diode_u = 0;
   int divisor = 0;
+  int change = 0;
   
   milliamps = 0;
   if (pv_u > bat_u) {
@@ -252,7 +253,12 @@ long calculate_power_in_battery(long powermah){
   }
   if (abs(milliamps) > 15) { 
     divisor = 225000 / milliamps;
-    powermah =  min(max(0, powermah + (millis() - time_power_check) / divisor), BATTERY_CAPACITY);
+    change =  (millis() - time_power_check) / divisor;
+    if(change < 0 && abs(change) > power_mah){
+      power_mah = 0;      
+    } else {
+      power_mah = min(power_mah + change, BATTERY_CAPACITY);
+    }
   }
   delay(50);
   Serial.print("Calculate power in battery: Diode_u: ");
@@ -260,7 +266,7 @@ long calculate_power_in_battery(long powermah){
   Serial.print(" Milliamps: ");
   Serial.print(milliamps);
   Serial.print(" Battery Power ");
-  Serial.print(powermah);
+  Serial.print(power_mah);
   Serial.print(" Pv U: ");
   Serial.print(pv_u);
   Serial.print(" Bat U: ");
@@ -270,11 +276,11 @@ long calculate_power_in_battery(long powermah){
   Serial.print(" Timedelay: ");
   Serial.println(millis()-time_power_check);
   time_power_check = millis();
-  return powermah;
+  return power_mah;
 }
 
 
-// ******* CHAPERT SUBROUTINES IO Management and SPI Management DigitalResistance
+// ******* Chapter SUBROUTINES IO Management and SPI Management DigitalResistance
 void do_relay_on(byte pin, boolean doit){
  if (doit) {
     digitalWrite(pin, HIGH);
@@ -311,7 +317,7 @@ void digitalPotWrite(int address, int value) {
 }
 
 
-// ******* CHAPERT SUBROUTINES Night Calulations
+// ******* Chapter SUBROUTINES Night Calulations
 void do_night_start(){
   night_start = millis();
   Serial.print("Loop: Night Start at (true min): ");
@@ -326,7 +332,7 @@ void do_night_end(){
 }
 
 
-// ******* CHAPERT SUBROUTINES Night Power Management
+// ******* Chapter SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   if (night_start != 0) {
     power_base = max(1000, (battery_power / (night_length / 3600000 + 1) * 0,6));
@@ -352,7 +358,7 @@ void peak_base_time_soft_charge_power_controll () {
   } 
 }
 
-// ******* CHAPERT SUBROUTINE Information on seriell Monitor
+// ******* Chapter SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
   outstr[17]="";
   if (0 == (ser_mon_line_counter % 32)) {

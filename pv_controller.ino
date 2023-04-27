@@ -167,7 +167,7 @@ void stop_measure_voltage(){
   digitalWrite(MEAS_ON,0);
 }
 
-// ******* CHAPERT SUBROUTINE Battery Power Calculation
+// ******* CHAPTER SUBROUTINE Battery Power Calculation
 long calculate_power_in_battery(long powermah){
   word diode_u = 0;
   milliamps = 0;
@@ -250,7 +250,7 @@ void check_night_end(){
 }
 
 
-// ******* CHAPERT SUBROUTINES Night Power Management
+// ******* CHAPTER SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   if (night_start != 0) {
     power_base = max(1000, (battery_power / (night_length / 3600000 + 1) * 0,6));
@@ -275,7 +275,7 @@ void peak_base_time_soft_charge_power_controll () {
   } 
 }
 
-// ******* CHAPERT SUBROUTINE Information on seriell Monitor
+// ******* CHAPTER SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
   char outstr[6]="";
   if (0 == (ser_mon_line_counter % 32)) {
