@@ -36,15 +36,18 @@ extern unsigned long timer0_millis;
 #define INVERTER_START_DIODE_U_H 250 // Voltage charging diode discharging stops (Hysteresis)
 #define BATTERY_CAPACITY 45000       // 48.000mAH Battery Capacity
 #define INVERTER_START_TIME 15000    // Inverter start producing power to grid after 4 min = 15000 * 16 millis /clock frequence 1 Mhz instead of 16 MHz
-#define POWER_BASE_MAX 2500          // Maximum Power needed at base time in mA
 #define PEAK_TIME_PERC 0.45          // Percentage of Peak time, each night firt x% are peak time, last 100%-x& are base time  
+#define MIN_DISCHARGE_CURRENT 900    // Minimum discharge current
+#define MAX_DISCHARGE_CURRENT 7000   // Maximum discharge current
+#define BASE_MAX_DISCHARGE_CURRENT 2500 // Maximum Power needed at base time in mA
+
 
 volatile unsigned long night_start = 0;       // night_start stores time stamp in millis/16 from last day to night dedection (divisor 16 because of 1MHz clock frequency)
 volatile unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 43.200.000 millis = 12h
 volatile unsigned long time_power_check = 0;  // time stamp from last battery power incremental and decremental calculation
 volatile word bat_u, pv_u;                    // measured voltage at battery and PV
 volatile word battery_power;                  // calculated actual power in battery
-volatile word power_peak = 4000, power_base = 2500; // base (off peak) and peak power from battery to inverter
+volatile word power_peak = 3300, power_base = 1800; // base (off peak) and peak power from battery to inverter
 volatile int discharge_current = 0, milliamps = 0;    // current in mA, milliamps to or from battery
 volatile byte ser_mon_line_counter = 0;       // Serial monitor line counter
 volatile byte deepsleep_counter;              // Counter for multiple deep sleeps
@@ -335,11 +338,11 @@ void do_night_end(){
 // ******* Chapter SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   if (night_start != 0) {
-    power_base = max(1000, (battery_power / (night_length / 3600000 + 1) * 0,6));
-    power_peak = max(1000, (battery_power / (night_length / 3600000 + 1) * 1,1));
-    if (power_base > POWER_BASE_MAX) {
-      power_peak = min(6500, (power_peak + (power_base - POWER_BASE_MAX)));
-      power_base = POWER_BASE_MAX;                  
+    power_base = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 0,6));
+    power_peak = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 1,1));
+    if (power_base > BASE_MAX_DISCHARGE_CURRENT) {
+      power_peak = min(MAX_DISCHARGE_CURRENT, (power_peak + (power_base - BASE_MAX_DISCHARGE_CURRENT)));
+      power_base = BASE_MAX_DISCHARGE_CURRENT;                  
     }
   } 
 }
@@ -348,19 +351,17 @@ void peak_base_time_soft_charge_power_control () {
   if (relay_on[REL_OUT]) {
     long since_night_start = (millis() - night_start) * 16;
     if (relay_on[REL_IN] && bat_u > BAT_U_SOFT_CHARGE_H) {
-      Serial.print("Base peak time soft charge : time since night start : ");
-      Serial.print(since_night_start);
-      Serial.print("Peak night length : ");
-      Serial.println(night_length * PEAK_TIME_PERC);      
-      discharge_current = (max(500, min(7000, milliamps - 2000)));
-    } else if (since_night_start  < (night_length * PEAK_TIME_PERC) || since_night_start > night_length) { 
-      discharge_current = power_peak;
-    } 
-    else {
-      discharge_current = power_base;     
-    }
-    set_power_of_discharge(discharge_current);
-  } 
+      discharge_current = (max(MIN_DISCHARGE_CURRENT, min(MAX_DISCHARGE_CURRENT, milliamps - 2000)));
+    } else if (bat_u < BAT_U_MIN_H) {
+      discharge_current = MIN_DISCHARGE_CURRENT;
+      } else if (since_night_start  < (night_length * PEAK_TIME_PERC) || since_night_start > night_length) { 
+        discharge_current = power_peak;
+      } 
+      else {
+        discharge_current = power_base;     
+      }
+  }
+  set_power_of_discharge(discharge_current);   
 }
 
 // ******* Chapter SUBROUTINE Information on seriell Monitor
