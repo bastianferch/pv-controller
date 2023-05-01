@@ -254,6 +254,8 @@ long calculate_power_in_battery (long power_mah){
   }
   if (relay_on[REL_OUT]) {
     milliamps = milliamps_pv_in - discharge_current;
+  } else {
+    milliamps = milliamps_pv_in;    
   }
   if (abs(milliamps) > 15) { 
     time_delay = (millis() - time_power_check);
@@ -343,8 +345,8 @@ void do_night_end(){
 // ******* Chapter SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   if (night_start != 0) {
-    power_base = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 0,6));
-    power_peak = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 1,1));
+    power_base = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 0.6));
+    power_peak = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 1) * 1.1));
     if (power_base > BASE_MAX_DISCHARGE_CURRENT) {
       power_peak = min(MAX_DISCHARGE_CURRENT, (power_peak + (power_base - BASE_MAX_DISCHARGE_CURRENT)));
       power_base = BASE_MAX_DISCHARGE_CURRENT;                  
