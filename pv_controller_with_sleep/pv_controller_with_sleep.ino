@@ -43,11 +43,12 @@ extern unsigned long timer0_millis;
 
 
 volatile unsigned long night_start = 0;       // night_start stores time stamp in millis/16 from last day to night dedection (divisor 16 because of 1MHz clock frequency)
-volatile unsigned long night_length = 43200000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 43.200.000 millis = 12h
+volatile unsigned long night_length = 36000000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 36.000.000 millis = 10h
 volatile unsigned long time_power_check = 0;  // time stamp from last battery power incremental and decremental calculation
 volatile word bat_u, pv_u;                    // measured voltage at battery and PV
 volatile word battery_power;                  // calculated actual power in battery
 volatile word power_peak = 3300, power_base = 1800; // base (off peak) and peak power from battery to inverter
+volatile word milliamps_pv_in = 0;            // current in mA, milliamps PV in
 volatile int discharge_current = 0, milliamps = 0;    // current in mA, milliamps to or from battery
 volatile byte ser_mon_line_counter = 0;       // Serial monitor line counter
 volatile byte deepsleep_counter;              // Counter for multiple deep sleeps
@@ -220,39 +221,39 @@ long map_word(long value, word from_low, word from_high, word to_low, word to_hi
 
 
 // ******* Chapter SUBROUTINE Battery Power Calculation
-long calculate_power_in_battery(long power_mah){
+long calculate_power_in_battery (long power_mah){
   word diode_u = 0;
   int divisor = 0;
   int change = 0;
   long time_delay;
-  milliamps = 0;
+  milliamps_pv_in = 0;
   if (pv_u > bat_u) {
     diode_u = pv_u - bat_u;
     if (relay_on[REL_IN]){  
       switch (diode_u) {
         case 0 ... 200: 
-          milliamps = map (diode_u, 0, 200, 100, 300); 
+          milliamps_pv_in = map (diode_u, 0, 200, 10, 150); 
           break;
-        case 201 ... 260:     
-          milliamps = map (diode_u, 201, 260, 350, 1000); 
+        case 201 ... 250:     
+          milliamps_pv_in = map (diode_u, 201, 250, 152, 1000); 
           break;
-        case 261 ... 275:           
-          milliamps = map (diode_u, 261, 275, 1000, 2000); 
+        case 251 ... 270:           
+          milliamps_pv_in = map (diode_u, 251, 270, 1000, 2000); 
           break;
-        case 276 ... 330:           
-          milliamps = map (diode_u, 276, 330, 2000, 8000); 
+        case 271 ... 340:           
+          milliamps_pv_in = map (diode_u, 271, 340, 2000, 8000); 
           break;
-        case 331 ... 350:           
-          milliamps = map (diode_u, 331, 350, 8000, 9000); 
+        case 341 ... 360:           
+          milliamps_pv_in = map (diode_u, 341, 360, 8000, 9000); 
           break;
         default:           
-          milliamps = map (diode_u, 351, 370, 9000, 11000); 
+          milliamps_pv_in = map (diode_u, 361, 360, 9000, 11000); 
           break;
       }
     }
   }
   if (relay_on[REL_OUT]) {
-    milliamps = milliamps - discharge_current;
+    milliamps = milliamps_pv_in - discharge_current;
   }
   if (abs(milliamps) > 15) { 
     time_delay = (millis() - time_power_check);
@@ -266,6 +267,10 @@ long calculate_power_in_battery(long power_mah){
   delay(50);
   Serial.print("Calculate power in battery: Diode_u: ");
   Serial.print(diode_u);
+  Serial.print(" Milliamps PV in: ");
+  Serial.print(milliamps_pv_in);
+  Serial.print(" Discharge current: ");
+  Serial.print(discharge_current);
   Serial.print(" Milliamps: ");
   Serial.print(milliamps);
   Serial.print(" Battery Power ");
@@ -303,7 +308,7 @@ void start_discharging(word current) { //Battery discharge power control functio
 void set_power_of_discharge(int value) { //milliampere
   Serial.print(" Discharge Current: ");
   Serial.println(value);
-  value = map(value,0,6500,0,58);
+  value = map(value,0,MAX_DISCHARGE_CURRENT,4,48);
   digitalPotWrite(0, value);
 }
  
@@ -351,7 +356,7 @@ void peak_base_time_soft_charge_power_control () {
   if (relay_on[REL_OUT]) {
     long since_night_start = (millis() - night_start) * 16;
     if (relay_on[REL_IN] && bat_u > BAT_U_SOFT_CHARGE_H) {
-      discharge_current = (max(MIN_DISCHARGE_CURRENT, min(MAX_DISCHARGE_CURRENT, milliamps - 2000)));
+      discharge_current = max(MIN_DISCHARGE_CURRENT, milliamps_pv_in / 2);
     } else if (bat_u < BAT_U_MIN_H) {
       discharge_current = MIN_DISCHARGE_CURRENT;
       } else if (since_night_start  < (night_length * PEAK_TIME_PERC) || since_night_start > night_length) { 
