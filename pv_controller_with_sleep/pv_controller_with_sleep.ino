@@ -54,7 +54,7 @@ volatile byte ser_mon_line_counter = 0;       // Serial monitor line counter
 volatile boolean relay_on[] = {false, false, false, false}; // {NULL, NULL,REL_IN, REL_OUT}
 volatile boolean night = false;               // if night
 volatile boolean trigger_discharge_on = false, trigger_discharge_off = false;// trigger to trun on or off after second time conditions match
-char outstr[17]="";                           // convert binary variables to string for output
+// char outstr[17]="";                           // convert binary variables to string for output
 long outlong;                                  // long tpo use sprintf with long variable instead of word
 
 void setup(){
@@ -62,8 +62,8 @@ void setup(){
   SMCR |= (1 << 2);                  // power down mode
   SMCR |= 1;                         // enable sleep
 
-  Serial.begin(9600);                // open the serial port at 9600 bps: Attention clock rate 1MHz lead to Baudrate at the Computer 600 Baud
-  Serial.println("####### PROGRAM NEW START ########");
+//  Serial.begin(9600);                // open the serial port at 9600 bps: Attention clock rate 1MHz lead to Baudrate at the Computer 600 Baud
+//  Serial.println("####### PROGRAM NEW START ########");
   pinmodes();
   initialize_SPI();
   delay(500);                        // delay 8 sec. before starting measuring voltage
@@ -79,15 +79,15 @@ void setup(){
     if (bat_u < BAT_U_MAX_H) {       // iF battery voltage is lower than max battery voltage hypothese do charging
       relay_on[REL_IN] = true;       
       do_relay_on(REL_IN,true);
-      Serial.print("Septup: Turn Relay In to on, start battery charging. PV Voltage: ");
-      Serial.println(pv_u);
+      // Serial.print("Septup: Turn Relay In to on, start battery charging. PV Voltage: ");
+      // Serial.println(pv_u);
     }        
   } else {
       night = true;
       if (bat_u > BAT_U_MIN_H){   // if Volatge at PV is not higher than usual voltage to start charging then do discharging at base_power
       discharge_current = power_base;
-      Serial.print("Septup: Turn Relay Out to on, start battery discharging. Battery Voltage: ");
-      Serial.println(bat_u);
+      // Serial.print("Septup: Turn Relay Out to on, start battery discharging. Battery Voltage: ");
+      // Serial.println(bat_u);
       start_discharging(discharge_current);
     }
   }  
@@ -129,7 +129,7 @@ void estimate_bat_power(){
 
 void loop(){
 
-  outstr[17]="";
+  //outstr[17]="";
   measure_ubat_upv();
   battery_power = calculate_power_in_battery(battery_power);
 
@@ -138,18 +138,18 @@ void loop(){
     if ((!relay_on[REL_OUT] && pv_u > PV_U_START_CHARGING) || (relay_on[REL_OUT] &&  pv_u > bat_u)) {
       relay_on[REL_IN] = true;
       do_relay_on(REL_IN, true);
-      Serial.print("Loop: Turn Relay In to on, start battery charging. PV Voltage: ");
-      Serial.println(pv_u);
+      // Serial.print("Loop: Turn Relay In to on, start battery charging. PV Voltage: ");
+      // Serial.println(pv_u);
     }
   } else {
 //                                         stop battery charging relay when no power from pv or battery voltage greater than maximum
     if (relay_on[REL_IN] && (pv_u < bat_u || bat_u > BAT_U_MAX)) {
       relay_on[REL_IN] = false;
       do_relay_on(REL_IN, false);
-      Serial.print("Loop: Turn Relay In to off, stop battery charging. PV Voltage: ");
-      Serial.print(pv_u);
-      Serial.print(" Battery Voltage: ");
-      Serial.println(bat_u);
+      // Serial.print("Loop: Turn Relay In to off, stop battery charging. PV Voltage: ");
+      // Serial.print(pv_u);
+      // Serial.print(" Battery Voltage: ");
+      // Serial.println(bat_u);
       if (bat_u > BAT_U_MAX) {
         battery_power = BATTERY_CAPACITY;
       }
@@ -160,16 +160,16 @@ void loop(){
 //                                         start discharging relay when pv Voltage under start charging voltage?
   if ( !relay_on[REL_OUT] && bat_u > BAT_U_MIN_H) {
     if ((relay_on[REL_IN] && (pv_u - bat_u) < INVERTER_START_DIODE_U ) || (!relay_on[REL_IN] &&  pv_u <=  PV_U_START_CHARGING)) {
-      Serial.print("Loop: Turn Trigger/Relay Out to on, start battery discharging. Battery Voltage: ");
+      // Serial.print("Loop: Turn Trigger/Relay Out to on, start battery discharging. Battery Voltage: ");
       if (trigger_discharge_on) {
         discharge_current = power_base;
-        Serial.println(bat_u);
+        // Serial.println(bat_u);
         start_discharging(discharge_current);
         trigger_discharge_on = false;
         if (!relay_on[REL_IN])  {
           relay_on[REL_IN] = true;
           do_relay_on(REL_IN, true);
-          Serial.print("Loop: Turn Relay In to on, start battery charging.");
+          // Serial.print("Loop: Turn Relay In to on, start battery charging.");
           delay(500);
           measure_ubat_upv();
         }
@@ -184,10 +184,10 @@ void loop(){
         if (trigger_discharge_off || bat_u < BAT_U_MIN) {
           set_power_of_discharge(700);
           delay(300);
-          Serial.print("Loop: Turn Relay Out to off, stop battery discharging. PV Voltage: ");
-          Serial.print(pv_u);
-          Serial.print(" Battery Voltage: ");
-          Serial.println(bat_u);
+          // Serial.print("Loop: Turn Relay Out to off, stop battery discharging. PV Voltage: ");
+          // Serial.print(pv_u);
+          // Serial.print(" Battery Voltage: ");
+          // Serial.println(bat_u);
           relay_on[REL_OUT] = false;
           do_relay_on(REL_OUT, false);
           discharge_current = 0;
@@ -195,10 +195,10 @@ void loop(){
           if (bat_u < BAT_U_MIN) battery_power = 0;
         }
         else {
-          Serial.print("Loop: Turn Trigger stop battery discharging to true. PV Voltage: ");
-          Serial.print(pv_u);
-          Serial.print(" Battery Voltage: ");
-          Serial.println(bat_u);
+          // Serial.print("Loop: Turn Trigger stop battery discharging to true. PV Voltage: ");
+          // Serial.print(pv_u);
+          // Serial.print(" Battery Voltage: ");
+          // Serial.println(bat_u);
           trigger_discharge_off = true;
         } 
       }
@@ -210,7 +210,7 @@ void loop(){
   check_night_start();
   check_night_end();
   peak_base_time_soft_charge_power_control();
-  Parameterausgabe_Serieller_Monitor();
+  // Parameterausgabe_Serieller_Monitor();
   if ((bat_u < BAT_U_MIN_H && relay_on[REL_OUT]) || (bat_u > BAT_U_MAX_H && relay_on[REL_IN])) watchdog_deepsleep(33, 5);  // deep_sleep 33 = 8 sec, 5 times = 40sec
   else watchdog_deepsleep(33, 30);                                                // deep_sleep 33 = 8 sec, 30 times = 240sec
 }
@@ -293,24 +293,24 @@ long calculate_power_in_battery (long power_mah){
     else power_mah = min(power_mah + change, BATTERY_CAPACITY);
   }
   delay(50);
-  Serial.print("Calculate power in battery: Diode_u: ");
-  Serial.print(diode_u);
-  Serial.print(" Milliamps PV in: ");
-  Serial.print(milliamps_pv_in);
-  Serial.print(" Discharge current: ");
-  Serial.print(discharge_current);
-  Serial.print(" Milliamps: ");
-  Serial.print(milliamps);
-  Serial.print(" Battery Power ");
-  Serial.print(power_mah);
-  Serial.print(" Pv U: ");
-  Serial.print(pv_u);
-  Serial.print(" Bat U: ");
-  Serial.print(bat_u);
-  Serial.print(" Divisor: ");
-  Serial.print(divisor);
-  Serial.print(" Timedelay: ");
-  Serial.println(millis()-time_power_check);
+  // Serial.print("Calculate power in battery: Diode_u: ");
+  // Serial.print(diode_u);
+  // Serial.print(" Milliamps PV in: ");
+  // Serial.print(milliamps_pv_in);
+  // Serial.print(" Discharge current: ");
+  // Serial.print(discharge_current);
+  // Serial.print(" Milliamps: ");
+  // Serial.print(milliamps);
+  // Serial.print(" Battery Power ");
+  // Serial.print(power_mah);
+  // Serial.print(" Pv U: ");
+  // Serial.print(pv_u);
+  // Serial.print(" Bat U: ");
+  // Serial.print(bat_u);
+  // Serial.print(" Divisor: ");
+  // Serial.print(divisor);
+  // Serial.print(" Timedelay: ");
+  // Serial.println(millis()-time_power_check);
   time_power_check = millis();
   return power_mah;
 }
@@ -331,8 +331,8 @@ void start_discharging(word current) { //Battery discharge power control functio
 }
 
 void set_power_of_discharge(int value) { //milliampere
-  Serial.print(" Discharge Current: ");
-  Serial.println(value);
+  // Serial.print(" Discharge Current: ");
+  // Serial.println(value);
   value = value * 0.9;
   value = map(value,0,MAX_DISCHARGE_CURRENT,0,DIGIPOTI_MAX_AT_MAX_DISCHARGE_CURRENT);
   digitalPotWrite(0, value);
@@ -356,8 +356,8 @@ void check_night_start(){
   if (!night && pv_u < NIGHT_STARTU) {
     power_base_peak_calculation();
     night_start = millis();
-    Serial.print("Loop: Night Start at (true min): ");
-    Serial.println((night_start * 16 / 60000));
+    // Serial.print("Loop: Night Start at (true min): ");
+    // Serial.println((night_start * 16 / 60000));
     night = true;
   }
 }
@@ -365,8 +365,8 @@ void check_night_end(){
   if (night && pv_u > NIGHT_ENDU) {
     if (16 * (millis() - night_start) > MIN_NIGHT_LENGTH) {
       night_length = 16 * (millis() - night_start);    
-      Serial.print("Loop: Night End, night length (true min): ");
-      Serial.println((night_length / 60000));
+      // Serial.print("Loop: Night End, night length (true min): ");
+      // Serial.println((night_length / 60000));
     }
     night = false;
   }
@@ -394,15 +394,15 @@ void peak_base_time_soft_charge_power_control () {
   }
   set_power_of_discharge(discharge_current);   
 }
-
+/*
 // ******* Chapter SUBROUTINE Information on seriell Monitor
 void Parameterausgabe_Serieller_Monitor() {
   outstr[17]="";
   if (0 == (ser_mon_line_counter % 32)) {
-    Serial.println("Status of relays        Volt_PV  Volt_bat Disc_curr  Bat_Curr Bat_Power Night_start(min)  Night_length(min) System_time(min)");    
+    // Serial.println("Status of relays        Volt_PV  Volt_bat Disc_curr  Bat_Curr Bat_Power Night_start(min)  Night_length(min) System_time(min)");    
   }
-  Serial.print(relay_on[REL_IN]  ? "In is on  " : "In is off ");
-  Serial.print(relay_on[REL_OUT]  ? "Out is on  " : "Out is off ");
+  // Serial.print(relay_on[REL_IN]  ? "In is on  " : "In is off ");
+  // Serial.print(relay_on[REL_OUT]  ? "Out is on  " : "Out is off ");
   outlong = pv_u;
   sprintf(outstr, "%10ld", outlong);
   Serial.print(outstr);
@@ -429,7 +429,7 @@ void Parameterausgabe_Serieller_Monitor() {
   Serial.flush();  
   delay(20);
 }
-
+*/
 ISR(WDT_vect)
 {
 }
