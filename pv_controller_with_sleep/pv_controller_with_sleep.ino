@@ -43,7 +43,7 @@ extern unsigned long timer0_millis;
 #define MIN_NIGHT_LENGTH 19800000    // minimum night length 330 min = 5,5 hours
 
 volatile unsigned long night_start = 0;       // night_start stores time stamp in millis/16 from last day to night dedection (divisor 16 because of 1MHz clock frequency)
-volatile unsigned long night_length = 30000000; // night_length calculated after fist day to nigth und nigth to day dedection in true millis, default 30.000.000 millis = 500min = 8h20min
+volatile unsigned long night_length = 30000000; // night_length calculated after fist day to nigth and nigth to day dedection in true millis, default 30.000.000 millis = 500min = 8h20min
 volatile unsigned long time_power_check = 0;  // time stamp from last battery power incremental and decremental calculation
 volatile word bat_u, pv_u;                    // measured voltage at battery and PV
 volatile word battery_power;                  // calculated actual power in battery in cAH = AH/100
