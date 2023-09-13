@@ -29,8 +29,8 @@ extern unsigned long timer0_millis;
 #define BAT_U_MIN 28500              // Voltage to stop discharging battery empty
 #define BAT_U_MIN_H 28950            // Voltage to restart discharing (Hysteresis)
 #define BAT_LIN 29750                // Battery linear voltage to power 28V until 29,75V
-#define INVERTER_START_DIODE_U 190   // Voltage charging diode discharging starts
-#define INVERTER_START_DIODE_U_H 225 // Voltage charging diode discharging stops (Hysteresis)
+#define INVERTER_START_DIODE_U 180   // Voltage charging diode discharging starts
+#define INVERTER_START_DIODE_U_H 205 // Voltage charging diode discharging stops (Hysteresis)
 #define BATTERY_CAPACITY 7000        // 90AH = 4500cAH Battery Capacity
 #define INVERTER_START_TIME 15000    // Inverter start producing power to grid after 4 min = 15000 * 16 millis /clock frequence 1 Mhz instead of 16 MHz
 #define PEAK_TIME_PERC 0.42          // Percentage of Peak time, each night firt x% are peak time, last 100%-x% are base time  
@@ -376,8 +376,8 @@ void check_night_end(){
 // ******* Chapter SUBROUTINES Night Power Management
 void power_base_peak_calculation () {
   if (night_start != 0) {
-    power_base = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 2) * 6));
-    power_peak = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 2) * 11));
+    power_base = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 2) * 6) * 0.9);
+    power_peak = max(MIN_DISCHARGE_CURRENT, (battery_power / (night_length / 3600000 + 2) * 11) * 0.9);
     if (power_base > BASE_MAX_DISCHARGE_CURRENT) {
       power_peak = min(MAX_DISCHARGE_CURRENT, (power_peak + (power_base - BASE_MAX_DISCHARGE_CURRENT)));
       power_base = BASE_MAX_DISCHARGE_CURRENT;                  
